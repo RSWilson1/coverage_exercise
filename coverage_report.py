@@ -39,7 +39,7 @@ def read_sambamba_input(sambamba_input_file):
         sambamba_input_file (str): The path to the sambamba input file.
 
     Returns:
-        df: A dataframe containing the coverage by exon for each gene.
+        sambamba_df (df): A dataframe containing the coverage by exon for each gene.
     """
 
     header_list = ["chromosome", "StartPosition", "EndPosition", "FullPosition", "NotUsed1", "NotUsed2", "GeneSymbol;Accession", "Size", "readCount", "meanCoverage", "percentage30", "sampleName"]
@@ -79,8 +79,26 @@ def generate_report(sambamba_df):
     under_100_coverage_list = under_100_coverage_df['GeneSymbol'].unique()
     print(f"Genes with less than 100% coverage at 30x: {", ".join(under_100_coverage_list)}.")
 
-
     print(under_100_coverage_df)
+
+
+def write_output_excel(under_100_coverage_df, output_file):
+    """
+    Writes the output to an excel file.
+
+    Args:
+        under_100_coverage_df (dataframe): A dataframe containing the genes with less than 100% coverage at 30x.
+        output_file (str): The path to the output file.
+
+    Returns:
+        None
+
+    Outputs:
+        excel_report (excel): An excel file containing the genes with less than 100% coverage at 30x.
+    """
+    under_100_coverage_df.to_excel(output_file, index=False)
+
+
 def main(sambamba_input_file):
     """
     Main function to generate a report listing any genes that have less than 100% coverage at 30x.
