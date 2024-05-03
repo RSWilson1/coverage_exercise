@@ -26,7 +26,7 @@ def find_files(directory):
     """
     files = []
     for file in os.listdir(directory):
-        if file.endswith(".tsv"):
+        if file.endswith("sambamba_output.tsv"):
             files.append(file)
     return files
 
