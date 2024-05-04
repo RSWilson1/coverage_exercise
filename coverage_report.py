@@ -14,6 +14,26 @@ import argparse
 import pandas as pd
 
 
+def parse_args():
+    """
+    Parses the command line arguments.
+
+    Returns:
+        args (argparse object): The argparse object containing user inputs.
+    """
+    parser = argparse.ArgumentParser(
+        description="Generates a report listing any genes that have less than 100% coverage at 30x.")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("-i", "--sambamba_input_file",
+                       help="The path to the sambamba input file")
+    group.add_argument("-D", "--input_directory",
+                       help="The directory containing all the tsvs for input")
+    parser.add_argument("-o", "--output_file_prefix",
+                        help="The output file prefix that will be prepended to the output file name", required=False)
+    args = parser.parse_args()
+    return args
+
+
 def find_files(directory):
     """
     Finds all the tsv files in the directory.
@@ -42,29 +62,35 @@ def read_sambamba_input(sambamba_input_file):
         sambamba_df (df): A dataframe containing the coverage by exon for each gene.
     """
 
-    header_list = ["chromosome", "StartPosition", "EndPosition", "FullPosition", "NotUsed1", "NotUsed2", "GeneSymbol;Accession", "Size", "readCount", "meanCoverage", "percentage30", "sampleName"]
+    header_list = ["chromosome", "StartPosition", "EndPosition", "FullPosition", "NotUsed1", "NotUsed2",
+                   "GeneSymbol;Accession", "Size", "readCount", "meanCoverage", "percentage30", "sampleName"]
     sambamba_df = pd.read_csv(sambamba_input_file, sep='\t', header=None,
                               names=header_list, comment="#")
 
     # Manipulate the dataframe to get the gene symbol and coverage
-    sambamba_df["GeneSymbol"] = sambamba_df["GeneSymbol;Accession"].str.split(";").str[0]
+    sambamba_df["GeneSymbol"] = sambamba_df["GeneSymbol;Accession"].str.split(
+        ";").str[0]
     sambamba_df["Coverage"] = sambamba_df["percentage30"]
     # Get accession
-    sambamba_df["Accession"] = sambamba_df["GeneSymbol;Accession"].str.split(";").str[1]
+    sambamba_df["Accession"] = sambamba_df["GeneSymbol;Accession"].str.split(
+        ";").str[1]
     print(sambamba_df.head())
 
     return sambamba_df
 
 
-def generate_report(sambamba_df):
+def check_coverage(sambamba_df):
     """
-    Generates a report listing any genes that have less than 100% coverage at 30x.
+    Checks the coverage of all genes that have less than 100% coverage at 30x.
+    Generates a subset df containing the genes with less than 100% coverage at 30x.
 
     Args:
-        sambamba_df (dataframe): A dataframe containing the coverage by exon for each gene.
+        sambamba_df (dataframe): A dataframe containing
+        the coverage by exon for each gene.
 
     Returns:
-        None
+        under_100_coverage_df (dataframe): A dataframe containing the genes
+        with less than 100% coverage at 30x.
 
     STOUT:
         Print statement for all genes with less than 100% coverage at 30x.
@@ -77,18 +103,21 @@ def generate_report(sambamba_df):
 
     # Print the genes with less than 100% coverage at 30x
     under_100_coverage_list = under_100_coverage_df['GeneSymbol'].unique()
-    print(f"Genes with less than 100% coverage at 30x: {", ".join(under_100_coverage_list)}.")
+    print(f"Genes with less than 100% coverage at 30x: {
+          ", ".join(under_100_coverage_list)}.")
 
     print(under_100_coverage_df)
 
+    return under_100_coverage_df
 
-def write_output_excel(under_100_coverage_df, output_file):
+
+def write_output_excel(under_100_coverage_df, output_file_prefix):
     """
     Writes the output to an excel file.
 
     Args:
         under_100_coverage_df (dataframe): A dataframe containing the genes with less than 100% coverage at 30x.
-        output_file (str): The path to the output file.
+        output_file_prefix (str): The path to the output file.
 
     Returns:
         None
@@ -96,27 +125,61 @@ def write_output_excel(under_100_coverage_df, output_file):
     Outputs:
         excel_report (excel): An excel file containing the genes with less than 100% coverage at 30x.
     """
-    under_100_coverage_df.to_excel(output_file, index=False)
+    # generate excel with gene name header, coverage per exon, and accession
+    # Add in HGNC ID if time.
+    under_100_coverage_df.to_excel(output_file_prefix, index=False)
 
 
-def main(sambamba_input_file):
+def generate_single_report(sambamba_input_file, output_file_prefix):
+    """
+    Function to generate a report listing any genes that have less than 100% coverage at 30x.
+
+    Args:
+        args.sambamba_input_file (str): The path to the sambamba input file.
+
+    Returns:
+        None
+
+    Outputs:
+        "*.xlsx" (excel): An excel file containing the genes with less than 100% coverage at 30x.
+    """
+    sambamba_df = read_sambamba_input(sambamba_input_file)
+    under_100_coverage_df = check_coverage(sambamba_df)
+    write_output_excel(under_100_coverage_df, f"{output_file_prefix}.xlsx")
+
+
+def main(args):
     """
     Main function to generate a report listing any genes that have less than 100% coverage at 30x.
 
     Args:
-        sambamba_input_file (str): The path to the sambamba input file.
+        args (argparse object): The argparse object containing user inputs.
 
     Returns:
         None
+
+    Outputs:
+        "*.xlsx" (excel): An excel file containing the genes with less than 100% coverage at 30x.
     """
-    sambamba_df = read_sambamba_input(sambamba_input_file)
-    generate_report(sambamba_df)
+    # logic to check which inputs and logic for what to run.
+    # If directory
+    if args.input_directory:
+        files = find_files(args.input_directory)
+        for file in files:
+            generate_single_report(file, args.output_file_prefix)
+    # If single file
+    elif args.sambamba_input_file:
+        generate_single_report(args.sambamba_input_file,
+                               args.output_file_prefix)
+    # If multiple files
+    # needs more logic to handle multiple files
+    else:
+        raise RuntimeError(
+            "Please provide either a single file or a directory of files.")
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Generates a report listing any genes that have less than 100% coverage at 30x.")
-    parser.add_argument("sambamba_input_file", help="The path to the sambamba input file")
-    parser.add_argument("input_directory", help="The directory containing all the tsvs for input")
-    parser.add_argument("output_file", help="The path to the output file")
-    args = parser.parse_args()
+    args = parse_args()
 
-    main(args.sambamba_input_file)
+    # run main function
+    main(args)
