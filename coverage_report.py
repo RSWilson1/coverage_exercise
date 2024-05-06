@@ -18,7 +18,8 @@ def parse_args():
     """
     Parses the command line arguments.
 
-    Returns:
+    Returns
+    -------
         args (argparse object): The argparse object containing user inputs.
     """
     parser = argparse.ArgumentParser(
@@ -38,10 +39,12 @@ def find_files(directory):
     """
     Finds all the tsv files in the directory.
 
-    Args:
+    parameters
+    ----------
         directory (str): The path to the directory.
 
-    Returns:
+    Returns
+    -------
         files (list): A list of all the tsv files in the directory.
     """
     files = []
@@ -55,10 +58,13 @@ def read_sambamba_input(sambamba_input_file):
     """
     Reads the sambamba input file and returns a dictionary containing the coverage by exon for each gene.
 
-    Args:
-        sambamba_input_file (str): The path to the sambamba input file.
+    parameters
+    ----------
+        sambamba_input_file (str): The path to the sambamba input file
+        containing the coverage by exon for each gene.
 
-    Returns:
+    Returns
+    -------
         sambamba_df (df): A dataframe containing the coverage by exon for each gene.
     """
 
@@ -84,60 +90,91 @@ def check_coverage(sambamba_df):
     Checks the coverage of all genes that have less than 100% coverage at 30x.
     Generates a subset df containing the genes with less than 100% coverage at 30x.
 
-    Args:
+    parameters
+    ----------
         sambamba_df (dataframe): A dataframe containing
         the coverage by exon for each gene.
 
-    Returns:
-        under_100_coverage_df (dataframe): A dataframe containing the genes
+    Returns
+    -------
+        genes_under_100_coverage_df (dataframe): A dataframe containing the genes
         with less than 100% coverage at 30x.
 
     STOUT:
         Print statement for all genes with less than 100% coverage at 30x.
     """
     # Filter genes with less than 100% coverage at 30x
-    filtered_df = sambamba_df[sambamba_df['percentage30'] < 100]
+    exons_under_100_coverage_df = sambamba_df[sambamba_df['percentage30'] < 100]
 
     # Create a dataframe for all genes with under 100% coverage
-    under_100_coverage_df = filtered_df[['GeneSymbol', 'Coverage']]
+    exons_under_100_coverage_df = exons_under_100_coverage_df[['GeneSymbol', 'Coverage']]
 
     # Print the genes with less than 100% coverage at 30x
-    under_100_coverage_list = under_100_coverage_df['GeneSymbol'].unique()
+    genes_under_100_coverage_list = exons_under_100_coverage_df['GeneSymbol'].unique()
     print(f"Genes with less than 100% coverage at 30x: {
-          ", ".join(under_100_coverage_list)}.")
+          ", ".join(genes_under_100_coverage_list)}.")
 
-    print(under_100_coverage_df)
+    genes_under_100_coverage_df = sambamba_df[sambamba_df['GeneSymbol'].isin(
+        genes_under_100_coverage_list
+        )]
 
-    return under_100_coverage_df
+    print(genes_under_100_coverage_df)
+
+    return genes_under_100_coverage_df
 
 
-def write_output_excel(under_100_coverage_df, output_file_prefix):
+def write_detailed_excel(sambamba_df, under_100_coverage_list, output_file_prefix):
+    # Select all exons for genes with less than 100% coverage
+    under_100_coverage_df = sambamba_df[sambamba_df['GeneSymbol'].isin(
+        under_100_coverage_list)]
+
+
+def write_output_excel(genes_under_100_coverage_df, output_file_prefix):
     """
     Writes the output to an excel file.
 
-    Args:
-        under_100_coverage_df (dataframe): A dataframe containing the genes with less than 100% coverage at 30x.
+    parameters
+    ----------
+        genes_under_100_coverage_df (dataframe): A dataframe containing the genes with less than 100% coverage at 30x.
         output_file_prefix (str): The path to the output file.
 
-    Returns:
+    Returns
+    -------
         None
 
     Outputs:
         excel_report (excel): An excel file containing the genes with less than 100% coverage at 30x.
     """
     # generate excel with gene name header, coverage per exon, and accession
-    # Add in HGNC ID if time.
-    under_100_coverage_df.to_excel(output_file_prefix, index=False)
+    # TODO: Add in HGNC ID if time.
+    genes_under_100_coverage_df.to_excel(output_file_prefix, index=False)
+
+    # Group by 'GeneSymbol' and aggregate 'Coverage'
+    summary_genes_under_100_coverage_df = \
+        genes_under_100_coverage_df.groupby('GeneSymbol')['Coverage'].agg(
+        LowestCoverage='min',
+        HighestCoverage='max',
+        AverageCoverage='mean',
+        MedianCoverage='median'
+    ).reset_index()
+
+    print(summary_genes_under_100_coverage_df)
+    summary_genes_under_100_coverage_df.to_excel(output_file_prefix, index=False)
+    # write a detailed excel
+    genes_under_100_coverage_df.to_excel(output_file_prefix, index=False)
+
 
 
 def generate_single_report(sambamba_input_file, output_file_prefix):
     """
     Function to generate a report listing any genes that have less than 100% coverage at 30x.
 
-    Args:
+    parameters
+    ----------
         args.sambamba_input_file (str): The path to the sambamba input file.
 
-    Returns:
+    Returns
+    -------
         None
 
     Outputs:
@@ -145,17 +182,19 @@ def generate_single_report(sambamba_input_file, output_file_prefix):
     """
     sambamba_df = read_sambamba_input(sambamba_input_file)
     under_100_coverage_df = check_coverage(sambamba_df)
-    write_output_excel(under_100_coverage_df, f"{output_file_prefix}.xlsx")
+    write_output_excel(under_100_coverage_df, f"{output_file_prefix}_report.xlsx")
 
 
 def main(args):
     """
     Main function to generate a report listing any genes that have less than 100% coverage at 30x.
 
-    Args:
+    parameters
+    ----------
         args (argparse object): The argparse object containing user inputs.
 
-    Returns:
+    Returns
+    -------
         None
 
     Outputs:
