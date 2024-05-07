@@ -3,15 +3,15 @@ This script generates a report listing any genes that have less than threshold c
 It takes the sambamba output as input and
 amalgamates the coverage by exon to determine the coverage for each gene.
 
-Usage: python coverage_report.py <sambamba_input_txt>
-Alternatively: python coverage_report.py <directory of sambamba files>
+Usage: python coverage_report.py -i <sambamba_input_txt> -t 100
+Alternatively: python coverage_report.py -D <directory of sambamba files> -t 100
 
 Roadmap for the script:
-# TODO: Additional feature in HGNC IDs for all gene symbols.
+# TODO: Additional feature in HGNC IDs as gene symbols are not unique.
 # TODO: Additional feature to add a column for the number of exons in the gene.
 # TODO: Additional feature to add a column for the number of exons with coverage less than threshold.
 # TODO: Make more memory efficient by removing unnecessary columns and minimum dtypes.
-
+# TODO: Handling for a list of files.
 Written 07/05/2024 by Robert Wilson
 """
 
@@ -38,8 +38,8 @@ def parse_args():
     parser.add_argument("-o", "--output_file_prefix",
                         help="The output file prefix that will be prepended to the output file name", required=False)
     parser.add_argument("-t", "--threshold", type=int,
-                       help="The threshold for coverage, default is 100%",
-                       required=False, default=100)
+                        help="The threshold for coverage, default is 100%",
+                        required=False, default=100)
     args = parser.parse_args()
     return args
 
@@ -54,16 +54,19 @@ def find_files(directory):
 
     Returns
     -------
-        files (list): A list of all the tsv files in the directory.
+        files_dict (dict): A dictionary of all the sambamba input files
+            in the directory with their associated prefix.
     """
-    files = []
+    files_dict = {}
 
     # Loop through all the files in the directory
     for file in os.listdir(directory):
-        print(file)
         if file.endswith("sambamba_output.txt") or file.endswith("sambamba_output.tsv"):
-            files.append(file)
-    return files
+            # Extract the file prefix
+            file_prefix = file.split('.')[0]
+            # Store the file prefix in the dictionary with the file name as the key
+            files_dict[file] = file_prefix
+    return files_dict
 
 
 def read_sambamba_input(sambamba_input_file):
@@ -78,12 +81,38 @@ def read_sambamba_input(sambamba_input_file):
     Returns
     -------
         sambamba_df (df): A dataframe containing the coverage by exon for each gene.
+
+    +-------------+---------------+-------------+---------------------+
+    | #chromosome | StartPosition | EndPosition |    FullPosition     |
+    +-------------+---------------+-------------+---------------------+
+    |           1 |      26126711 |    26126914 | 1-26126711-26126914 |
+    |           1 |      26127523 |    26127661 | 1-26127523-26127661 |
+    |           1 |      26128496 |    26128618 | 1-26128496-26128618 |
+    +-------------+---------------+-------------+---------------------+...
+    +---------+-----------+----------------------+-------+-----------+
+    | NotUsed | NotUsed.1 | GeneSymbol;Accession | Size  | readCount |
+    +---------+-----------+----------------------+-------+-----------+
+    |       0 | +         | SELENON;NM_020451.2  | 57190 |       142 |
+    |       0 | +         | SELENON;NM_020451.2  | 57190 |      5748 |
+    |       0 | +         | SELENON;NM_020451.2  | 57190 |      2637 |
+    +---------+-----------+----------------------+-------+-----------+...
+    +--------------+--------------+------------+------------+-------------+
+    | meanCoverage | percentage30 | sampleName | GeneSymbol | Accession   |
+    +--------------+--------------+------------+------------+-------------+
+    |      39.5222 |      49.2611 |          1 | SELENON    | NM_020451.2 |
+    |      3501.21 |          100 |          1 | SELENON    | NM_020451.2 |
+    |      1105.45 |          100 |          1 | SELENON    | NM_020451.2 |
+    +--------------+--------------+------------+------------+-------------+
+
+    nb. percentage30 is the percentage of the exon covered at 30x.
+
     """
     # Read the sambamba input file, with tab and whitespace as separators
     try:
-        sambamba_df = pd.read_csv(sambamba_input_file, sep=r"\s+", header=0, index_col=False)
+        sambamba_df = pd.read_csv(
+            sambamba_input_file, sep=r"\s+", header=0, index_col=False)
     except Exception as e:
-        raise RuntimeError(f"Error reading the file: {e}")
+        raise RuntimeError(f"Error reading the file, see: {e}")
     # Set dtypes for the columns
     dtypes = {
         'StartPosition': "int64",
@@ -98,14 +127,10 @@ def read_sambamba_input(sambamba_input_file):
     }
     sambamba_df = sambamba_df.astype(dtypes)
 
-    # Manipulate the dataframe to get the gene symbol and coverage
-    sambamba_df["GeneSymbol"] = sambamba_df["GeneSymbol;Accession"].str.split(
-        ";").str[0]
-    sambamba_df["Coverage"] = sambamba_df["percentage30"]
-    # Get accession
-    sambamba_df["Accession"] = sambamba_df["GeneSymbol;Accession"].str.split(
-        ";").str[1]
-    print(sambamba_df.head())
+    # Split 'GeneSymbol;Accession' into 'GeneSymbol' and 'Accession'
+    sambamba_df[['GeneSymbol', 'Accession']] = sambamba_df[
+        "GeneSymbol;Accession"
+    ].str.split(';', expand=True)
 
     return sambamba_df
 
@@ -123,41 +148,41 @@ def check_coverage(sambamba_df, threshold):
 
     Returns
     -------
-        genes_low_coverage_df (dataframe): A dataframe containing the genes
+        low_coverage_genes_df (dataframe): A dataframe containing the genes
             with less than threshold coverage at 30x.
-        genes_low_coverage_list (list):
+        low_coverage_genes_list (list):
             A list of all the genes with less than threshold coverage at 30x.
 
     STOUT:
         Print statement for all genes with less than threshold coverage at 30x.
     """
     # Filter genes with less than threshold coverage at 30x
-    exons_low_coverage_df = sambamba_df[sambamba_df['percentage30'] < threshold]
+    low_coverage_exons_df = sambamba_df[sambamba_df['percentage30'] < threshold]
 
     # Create a dataframe for all genes with under threshold coverage
-    exons_low_coverage_df = exons_low_coverage_df[[
-        'GeneSymbol', 'Coverage']]
+    low_coverage_exons_df = low_coverage_exons_df[[
+        'GeneSymbol', 'percentage30']]
 
     # Print the genes with less than threshold coverage at 30x
-    genes_low_coverage_list = exons_low_coverage_df['GeneSymbol'].unique(
+    low_coverage_genes_list = low_coverage_exons_df['GeneSymbol'].unique(
     )
-    print(f"Genes with less than threshold {threshold} coverage at 30x: {
-          ", ".join(genes_low_coverage_list)}.")
+    print(f"Genes with less than threshold ({threshold}% coverage) at 30x: {
+          ", ".join(low_coverage_genes_list)}.")
 
-    genes_low_coverage_df = sambamba_df[sambamba_df['GeneSymbol'].isin(
-        genes_low_coverage_list
+    low_coverage_genes_df = sambamba_df[sambamba_df['GeneSymbol'].isin(
+        low_coverage_genes_list
     )]
 
-    return genes_low_coverage_df, genes_low_coverage_list
+    return low_coverage_genes_df, low_coverage_genes_list
 
 
-def write_output_excel(genes_low_coverage_df, output_file_prefix):
+def write_output_excels(low_coverage_genes_df, output_file_prefix):
     """
     Writes the output to an excel file.
 
     parameters
     ----------
-        genes_low_coverage_df (dataframe): A dataframe containing the genes with less than threshold coverage at 30x.
+        low_coverage_genes_df (dataframe): A dataframe containing the genes with less than threshold coverage at 30x.
         output_file_prefix (str): The path to the output file.
 
     Returns
@@ -173,20 +198,30 @@ def write_output_excel(genes_low_coverage_df, output_file_prefix):
     """
     # generate excel with gene name header, coverage per exon, and accession
 
-    # Group by 'GeneSymbol' and aggregate 'Coverage'
-    summary_genes_low_coverage_df = \
-        genes_low_coverage_df.groupby('GeneSymbol')['Coverage'].agg(
+    # Group by 'GeneSymbol' and aggregate 'percentage30'
+    low_coverage_genes_summary_df = \
+        low_coverage_genes_df.groupby('GeneSymbol;Accession')['percentage30'].agg(
             LowestCoverage='min',
             HighestCoverage='max',
-            AverageCoverage='mean',
-            MedianCoverage='median'
+            MeanCoveragePerExon='mean',
+            MedianCoveragePerExon='median'
         ).reset_index()
 
-    summary_genes_low_coverage_df.to_excel(
+    # Split 'GeneSymbol;Accession' into 'GeneSymbol' and 'Accession'
+    low_coverage_genes_summary_df[['GeneSymbol', 'Accession']] = \
+        low_coverage_genes_summary_df["GeneSymbol;Accession"].str.split(
+            ';', expand=True)
+
+    #reorder columns
+    low_coverage_genes_summary_df = low_coverage_genes_summary_df[[
+        'GeneSymbol', 'Accession', 'LowestCoverage', 'HighestCoverage',
+        'MeanCoveragePerExon', 'MedianCoveragePerExon'
+    ]]
+    low_coverage_genes_summary_df.to_excel(
         f"{output_file_prefix}_summary_report.xlsx", index=False
     )
     # write a detailed excel
-    genes_low_coverage_df.to_excel(
+    low_coverage_genes_df.to_excel(
         f"{output_file_prefix}_report.xlsx",
         index=False
     )
@@ -214,9 +249,10 @@ def generate_single_report(sambamba_input_file, output_file_prefix, threshold):
             the genes with less than threshold coverage at 30x with summary metrics.
     """
     sambamba_df = read_sambamba_input(sambamba_input_file)
-    low_coverage_df, genes_low_coverage_list = check_coverage(sambamba_df, threshold)
-    write_output_excel(low_coverage_df, f"{
-                       output_file_prefix}_report.xlsx")
+    low_coverage_df, low_coverage_genes_list = check_coverage(
+        sambamba_df, threshold)
+    write_output_excels(low_coverage_df, f"{
+        output_file_prefix}_report.xlsx")
 
 
 def main(args):
@@ -239,13 +275,19 @@ def main(args):
     # If directory
     if args.input_directory:
         files = find_files(args.input_directory)
-        for file in files:
+        for file, file_prefix in files.items():
             generate_single_report(file,
-                                   args.output_file_prefix,
+                                   f"{args.output_file_prefix}{file_prefix}",
                                    args.threshold
                                    )
     # If single file
     elif args.sambamba_input_file:
+        if args.output_file_prefix is None:
+            args.output_file_prefix = args.sambamba_input_file.split(".")[0]
+        elif args.output_file_prefix:
+            input_file_name = args.sambamba_input_file.split(".")[0]
+            args.output_file_prefix = f"{
+                args.output_file_prefix}{input_file_name}"
         generate_single_report(args.sambamba_input_file,
                                args.output_file_prefix,
                                args.threshold)
