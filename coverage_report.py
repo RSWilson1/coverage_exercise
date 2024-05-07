@@ -3,10 +3,16 @@ This script generates a report listing any genes that have less than threshold c
 It takes the sambamba output as input and
 amalgamates the coverage by exon to determine the coverage for each gene.
 
-Usage: python coverage_report.py <sambamba_input_tsv>
-Alternatively: python coverage_report.py <directory of tsvs>
+Usage: python coverage_report.py <sambamba_input_txt>
+Alternatively: python coverage_report.py <directory of sambamba files>
 
+Roadmap for the script:
 # TODO: Additional feature in HGNC IDs for all gene symbols.
+# TODO: Additional feature to add a column for the number of exons in the gene.
+# TODO: Additional feature to add a column for the number of exons with coverage less than threshold.
+# TODO: Make more memory efficient by removing unnecessary columns and minimum dtypes.
+
+Written 07/05/2024 by Robert Wilson
 """
 
 import os
@@ -74,7 +80,10 @@ def read_sambamba_input(sambamba_input_file):
         sambamba_df (df): A dataframe containing the coverage by exon for each gene.
     """
     # Read the sambamba input file, with tab and whitespace as separators
-    sambamba_df = pd.read_csv(sambamba_input_file, sep=r"\s+", header=0, index_col=False)
+    try:
+        sambamba_df = pd.read_csv(sambamba_input_file, sep=r"\s+", header=0, index_col=False)
+    except Exception as e:
+        raise RuntimeError(f"Error reading the file: {e}")
     # Set dtypes for the columns
     dtypes = {
         'StartPosition': "int64",
