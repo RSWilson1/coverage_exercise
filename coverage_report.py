@@ -51,8 +51,7 @@ def find_files(directory):
         files (list): A list of all the tsv files in the directory.
     """
     files = []
-    print(directory)
-    print(os.listdir(directory))
+
     # Loop through all the files in the directory
     for file in os.listdir(directory):
         print(file)
@@ -84,14 +83,12 @@ def read_sambamba_input(sambamba_input_file):
         'GeneSymbol;Accession': str,
         'Size': "int64",
         'readCount': "int64",
-        'meanCoverage': float,
-        'percentage30': float,
+        'meanCoverage': "float64",
+        'percentage30': "float64",
         'sampleName': str,
     }
     sambamba_df = sambamba_df.astype(dtypes)
-    print(sambamba_df.head())
-    print(sambamba_df.columns)
-    print(sambamba_df.dtypes)
+
     # Manipulate the dataframe to get the gene symbol and coverage
     sambamba_df["GeneSymbol"] = sambamba_df["GeneSymbol;Accession"].str.split(
         ";").str[0]
