@@ -12,6 +12,11 @@ Roadmap for the script:
 # TODO: Additional feature to add a column for the number of exons with coverage less than threshold.
 # TODO: Make more memory efficient by removing unnecessary columns and minimum dtypes.
 # TODO: Handling for a list of files.
+# TODO: Add testing for functional parts of script
+ - parse_args
+ - read_sambamba_input
+ - single vs directory
+ - errors raised.
 Written 07/05/2024 by Robert Wilson
 """
 
