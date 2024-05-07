@@ -1,7 +1,7 @@
-# Running `coverage_report.py` with Command Line Arguments
+## Generate a report of all genes with low coverage from sambamba files.
 
 ## Introduction
-This script generates a report listing any genes that have less than 100% coverage at 30x.
+This script `coverage_report.py` generates a report listing any genes that have less than 100% coverage at 30x.
 It takes the sambamba output as input and
 amalgamates the coverage by exon to determine the coverage for each gene.
 
@@ -27,13 +27,15 @@ Example cmd for running.
 python coverage_report.py -i NGS148_34_139558_CB_CMCMD_S33_R1_001.sambamba_output.txt -o NGS148
 ```
 
+Or for a directory of sambamba input files.
+```
+python coverage_report.py -D ./bsambamba_files/ -o directory_example -t 100
+```
+
 ## Options
-- List all available command line options and their descriptions.
-- Include any default values or required arguments.
-
-## Examples
-- Provide additional examples of running the script with different combinations of command line arguments.
-
-
-## References
-- List any external resources or references used in creating the document.
+#### Required
+- `-i`, `--sambamba_input_file`: The path to the single sambamba input file
+- `-D`, `--input_directory`: The directory containing all the sambamba input files (must end in `sambamba_output.txt` or `sambamba_output.tsv`)
+#### Optional
+- `-o`, `--output_file_prefix`: The output file prefix that will be prepended to the output file name (optional)
+- `-t`, `--threshold`: The threshold for coverage, default is 100%
