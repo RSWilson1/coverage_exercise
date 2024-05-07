@@ -9,10 +9,10 @@ The script generates two excel files, a summary excel for all genes that failed 
 The detailed excel report contains all the exons for each gene which failed the 30x coverage for further inspection.
 
 ## Prerequisites
-Full requirements listed in requirements.txt
-- Python 3.12
-- Pandas
-- openpyxl
+Full requirements listed in requirements.txt.
+- Python (3.12)
+- Pandas (2.2.2)
+- openpyxl (3.1.2)
 
 
 ## Installation
